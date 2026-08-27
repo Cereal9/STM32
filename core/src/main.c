@@ -1,11 +1,6 @@
 #include "stm32l4xx.h"
 
-#define LED_PORT  GPIOB
-#define LED_PIN   3U
-
-void SystemInit(void)
-{
-}
+void SystemInit(void){}
 
 static void spin(volatile uint32_t n){
     while (n--) {
@@ -15,11 +10,13 @@ static void spin(volatile uint32_t n){
 
 int main(void){
     RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
-
-    LED_PORT->MODER = (LED_PORT->MODER & ~(3U << (LED_PIN * 2U))) | (1U << (LED_PIN * 2U));
+    GPIOB->MODER  = GPIO_MODER_MODE3_0;
 
     for (;;) {
-        LED_PORT->ODR ^= (1U << LED_PIN);
+        GPIOB->BSRR = GPIO_BSRR_BS3;    /* LED on  */
+        spin(200000);
+
+        GPIOB->BSRR = GPIO_BSRR_BR3;    /* LED off */
         spin(200000);
     }
 }
