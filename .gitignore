@@ -6,3 +6,4 @@ build/
 *.hex
 *.map
 *.lst
+compile_commands.json

@@ -83,7 +83,7 @@ LFLAGS += -Wl,--print-memory-usage
 
 # ---- Rules -------------------------------------------------------------------
 .PHONY: all
-all: $(TARGET).bin
+all: $(TARGET).bin compile_commands.json
 
 $(BUILD_DIR)/%.o: %.s
 	@mkdir -p $(dir $@)
@@ -118,6 +118,19 @@ debug: $(TARGET).elf
 	st-util &
 	arm-none-eabi-gdb -ex="target extended-remote :4242" $(TARGET).elf
 	pkill st-util
+
+# IntelliSense and clangd resolve headers from compile_commands.json. It is
+# generated from the same CFLAGS the compiler gets, so the editor can never
+# disagree with the build about include paths or defines.
+.PHONY: compile_commands.json
+compile_commands.json:
+	@echo '[' > $@
+	@for src in $(C_SRCS); do \
+	    printf '  {"directory": "%s", "file": "%s", "command": "%s -c %s %s"},\n' \
+	        '$(CURDIR)' "$$src" '$(CC)' '$(CFLAGS)' "$$src" >> $@; \
+	done
+	@sed -i '$$ s/,$$//' $@
+	@echo ']' >> $@
 
 .PHONY: clean
 clean:
