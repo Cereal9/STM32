@@ -1,6 +1,10 @@
 #include "stm32l4xx.h"
 #include "initialize.h"
 
+static volatile uint64_t ms_ticks = 0;
+void SystemInit(void){
+    Clock_Init();
+}
 
 void IWDG_Init(void){
     IWDG->KR  = IWD_ENABLE_KEY;
@@ -11,13 +15,19 @@ void IWDG_Init(void){
     IWDG->KR  = IWD_RELOAD_KEY;
 }
 
-// Add a simple system tick so we can keep timing of the microcontroller
-void SysTick_handler(void){}
-void SysTick_MS(void){
-
+void IWDG_Kick(void){
+    IWDG->KR = IWD_RELOAD_KEY;
 }
-void SystemInit(void){
-    Clock_Init();
+
+void SysTick_Handler(void){
+    ms_ticks++;
+}
+
+uint64_t SysTick_MS(void){
+    __disable_irq();
+    uint64_t ticks = ms_ticks;
+    __enable_irq();
+    return ticks;
 }
 
 void Clock_Init(void){
@@ -26,4 +36,8 @@ void Clock_Init(void){
     RCC->CFGR &= ~RCC_CFGR_SW;
     RCC->CFGR |= RCC_CFGR_SW_HSI;
     while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI) {}
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+    SysTick->LOAD = SYSTICK_RELOAD_1MS;
+    SysTick->VAL  = 0;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
 }
