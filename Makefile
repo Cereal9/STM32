@@ -1,8 +1,6 @@
 # ---- Directories -------------------------------------------------------------
-CORE_DIR    = ./core
-DRIVERS_DIR = ./drivers
-LIB_DIR     = ./lib
-BUILD_DIR   = ./build
+SRC_DIR   = ./src
+BUILD_DIR = ./build
 
 TARGET = $(BUILD_DIR)/firmware
 
@@ -13,35 +11,36 @@ FPU_SPEC = fpv4-sp-d16
 DEVICE   = STM32L432xx
 
 # ---- Source discovery --------------------------------------------------------
-# Only search directories that actually exist, so a missing drivers/ or lib/
-# is not an error.
-DIRS = $(CORE_DIR)
-ifneq (,$(wildcard $(DRIVERS_DIR)))
-    DIRS += $(DRIVERS_DIR)
-endif
-ifneq (,$(wildcard $(LIB_DIR)))
-    DIRS += $(LIB_DIR)
-endif
-
-LD_SCRIPT = $(shell find $(DIRS) -name '*.ld')
-STARTUP   = $(shell find $(DIRS) -name '*.s')
-C_SRCS    = $(shell find $(DIRS) -name '*.c')
+# src/test holds host-side unit tests, not firmware sources - keep it out of
+# the cross-compiled build.
+LD_SCRIPT = $(shell find $(SRC_DIR) -name '*.ld' -not -path '*/test/*')
+STARTUP   = $(shell find $(SRC_DIR) -name '*.s' -not -path '*/test/*')
+C_SRCS    = $(shell find $(SRC_DIR) -name '*.c' -not -path '*/test/*')
 
 # Every directory holding a header becomes an include path.
-INC_DIRS      = $(sort $(dir $(shell find $(DIRS) -name '*.h')))
+INC_DIRS      = $(sort $(dir $(shell find $(SRC_DIR) -name '*.h' -not -path '*/test/*')))
 INC_DIRS_FLAG = $(addprefix -I, $(INC_DIRS))
 
 OBJS  = $(addprefix $(BUILD_DIR)/, $(STARTUP:.s=.o))
 OBJS += $(addprefix $(BUILD_DIR)/, $(C_SRCS:.c=.o))
 DEPS  = $(OBJS:.o=.d)
 
+# ---- STM32CubeCLT -------------------------------------------------------------
+CUBECLT_DIR = /opt/st/stm32cubeclt_1.22.0
+
 # ---- Toolchain ---------------------------------------------------------------
-TOOLCHAIN = /usr
-CC = $(TOOLCHAIN)/bin/arm-none-eabi-gcc
-AS = $(TOOLCHAIN)/bin/arm-none-eabi-gcc
-OC = $(TOOLCHAIN)/bin/arm-none-eabi-objcopy
-OD = $(TOOLCHAIN)/bin/arm-none-eabi-objdump
-OS = $(TOOLCHAIN)/bin/arm-none-eabi-size
+TOOLCHAIN = $(CUBECLT_DIR)/GNU-tools-for-STM32
+CC   = $(TOOLCHAIN)/bin/arm-none-eabi-gcc
+AS   = $(TOOLCHAIN)/bin/arm-none-eabi-gcc
+OC   = $(TOOLCHAIN)/bin/arm-none-eabi-objcopy
+OD   = $(TOOLCHAIN)/bin/arm-none-eabi-objdump
+OS   = $(TOOLCHAIN)/bin/arm-none-eabi-size
+GDB  = $(TOOLCHAIN)/bin/arm-none-eabi-gdb
+
+# ---- ST-Link tooling ------------------------------------------------------
+PROGRAMMER_CLI = $(CUBECLT_DIR)/STM32CubeProgrammer/bin/STM32_Programmer_CLI
+GDBSERVER_DIR  = $(CUBECLT_DIR)/STLink-gdb-server/bin
+GDBSERVER_PORT = 61234
 
 # Architecture flags shared by the assembler, compiler and linker. Keeping them
 # identical everywhere is what stops the float-ABI mismatch at link time.
@@ -83,7 +82,7 @@ LFLAGS += -Wl,--print-memory-usage
 
 # ---- Rules -------------------------------------------------------------------
 .PHONY: all
-all: $(TARGET).bin
+all: $(TARGET).bin compile_commands.json
 
 $(BUILD_DIR)/%.o: %.s
 	@mkdir -p $(dir $@)
@@ -111,13 +110,27 @@ dump: $(TARGET).elf
 
 .PHONY: flash
 flash: $(TARGET).bin
-	st-flash --reset write $(TARGET).bin 0x08000000
+	$(PROGRAMMER_CLI) -c port=SWD -w $(TARGET).bin 0x08000000 -v -rst
 
 .PHONY: debug
 debug: $(TARGET).elf
-	st-util &
-	arm-none-eabi-gdb -ex="target extended-remote :4242" $(TARGET).elf
-	pkill st-util
+	cd $(GDBSERVER_DIR) && ./ST-LINK_gdbserver -d -p $(GDBSERVER_PORT) -cp $(dir $(PROGRAMMER_CLI)) &
+	sleep 1
+	$(GDB) -ex="target extended-remote :$(GDBSERVER_PORT)" $(TARGET).elf
+	pkill -f ST-LINK_gdbserver
+
+# IntelliSense and clangd resolve headers from compile_commands.json. It is
+# generated from the same CFLAGS the compiler gets, so the editor can never
+# disagree with the build about include paths or defines.
+.PHONY: compile_commands.json
+compile_commands.json:
+	@echo '[' > $@
+	@for src in $(C_SRCS); do \
+	    printf '  {"directory": "%s", "file": "%s", "command": "%s -c %s %s"},\n' \
+	        '$(CURDIR)' "$$src" '$(CC)' '$(CFLAGS)' "$$src" >> $@; \
+	done
+	@sed -i '$$ s/,$$//' $@
+	@echo ']' >> $@
 
 .PHONY: clean
 clean:

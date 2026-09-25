@@ -6,3 +6,9 @@ build/
 *.hex
 *.map
 *.lst
+compile_commands.json
+.vscode/
+*.log
+*.swp
+*~
+.DS_Store
