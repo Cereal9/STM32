@@ -31,6 +31,7 @@ uint64_t SysTick_MS(void){
 }
 
 void Clock_Init(void){
+    //I need to verify this with the reference manual 
     RCC->CR |= RCC_CR_HSION;
     while (!(RCC->CR & RCC_CR_HSIRDY)) {}
     RCC->CFGR &= ~RCC_CFGR_SW;
