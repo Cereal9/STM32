@@ -1,0 +1,17 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug (arm-none-eabi)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-debug",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+      "vendor": { "jetbrains.com/clion": { "toolchain": "ARM Embedded" } }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" }
+  ]
+}
