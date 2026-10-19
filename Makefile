@@ -1,3 +1,8 @@
+# ---- Make behaviour ------------------------------------------------------------
+# Build on every core by default; --output-sync keeps each file's compiler output
+# together so parallel errors stay readable. Override with e.g. `make -j1`.
+MAKEFLAGS += -j$(shell nproc) --output-sync=target --no-builtin-rules --no-print-directory
+
 # ---- Directories -------------------------------------------------------------
 SRC_DIR   = ./src
 BUILD_DIR = ./build
@@ -13,13 +18,16 @@ DEVICE   = STM32L432xx
 # ---- Source discovery --------------------------------------------------------
 # src/test holds host-side unit tests, not firmware sources - keep it out of
 # the cross-compiled build.
-LD_SCRIPT = $(shell find $(SRC_DIR) -name '*.ld' -not -path '*/test/*')
-STARTUP   = $(shell find $(SRC_DIR) -name '*.s' -not -path '*/test/*')
-C_SRCS    = $(shell find $(SRC_DIR) -name '*.c' -not -path '*/test/*')
+LD_SCRIPT := $(shell find $(SRC_DIR) -name '*.ld' -not -path '*/test/*')
+STARTUP   := $(shell find $(SRC_DIR) -name '*.s' -not -path '*/test/*')
+C_SRCS    := $(shell find $(SRC_DIR) -name '*.c' -not -path '*/test/*')
 
-# Every directory holding a header becomes an include path.
-INC_DIRS      = $(sort $(dir $(shell find $(SRC_DIR) -name '*.h' -not -path '*/test/*')))
-INC_DIRS_FLAG = $(addprefix -I, $(INC_DIRS))
+# Every directory holding a header becomes an include path. Vendor CMSIS headers
+# go in as -isystem so their warnings don't trip -Werror on our own code.
+CMSIS_INC     = $(SRC_DIR)/drivers/cmsis/inc/
+INC_DIRS      := $(sort $(dir $(shell find $(SRC_DIR) -name '*.h' -not -path '*/test/*')))
+INC_DIRS_FLAG := $(addprefix -I, $(filter-out $(CMSIS_INC), $(INC_DIRS)))
+INC_DIRS_FLAG += -isystem $(CMSIS_INC)
 
 OBJS  = $(addprefix $(BUILD_DIR)/, $(STARTUP:.s=.o))
 OBJS += $(addprefix $(BUILD_DIR)/, $(C_SRCS:.c=.o))
@@ -60,10 +68,11 @@ ASFLAGS += -Wall
 CFLAGS  = $(ARCH_FLAGS)
 CFLAGS += -D$(DEVICE)
 CFLAGS += -std=c11
-CFLAGS += -Wall -Wextra
+CFLAGS += -Wall -Wextra -Werror -Wshadow -Wconversion
 CFLAGS += -Og -g3
 CFLAGS += -ffunction-sections -fdata-sections -fno-common
 CFLAGS += -fmessage-length=0
+CFLAGS += -pipe
 CFLAGS += -MMD -MP
 CFLAGS += $(INC_DIRS_FLAG)
 
@@ -137,6 +146,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 .PHONY: fromscratch
-fromscratch: clean all
+fromscratch:
+	$(MAKE) clean
+	$(MAKE) all
 
 -include $(DEPS)

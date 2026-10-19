@@ -15,7 +15,7 @@ STM32/
 │   ├── app/                      Application-level logic (state machines,
 │   │                             task coordination). Empty for now.
 │   ├── common/                   Chip-agnostic shared code.
-│   │   ├── initialize.c/.h       System bring-up: SystemInit, clock config,
+│   │   ├── initialize.c/.h       System bring-up: SystemInit (FPU), clock,
 │   │   │                         SysTick (1ms tick), IWDG watchdog init/kick.
 │   ├── drivers/                  Hardware-facing code — vendor-supplied and
 │   │   │                         your own peripheral drivers live here side
@@ -94,18 +94,18 @@ generated editor files (`compile_commands.json`), machine-local editor config
 
 ## Firmware behavior
 
-- **`SystemInit()`** (called automatically before `main()`, per CMSIS
-  convention) calls `Clock_Init()`, which switches SYSCLK to HSI16 (16MHz),
-  enables GPIOB's clock, and configures SysTick for a 1ms interrupt.
-- **SysTick** increments a 64-bit millisecond counter (`ms_ticks`) on every
-  interrupt; `SysTick_MS()` reads it back safely (short critical section,
-  since a 64-bit read isn't atomic on this 32-bit CPU) — usable from
-  anywhere in the program.
-- **IWDG** (independent watchdog) is configured with a ~2 second timeout.
-  `IWDG_Kick()` is called every pass of the superloop in `main()` to refresh
-  it. Note: `IWDG_Init()` must actually be called somewhere to arm the
-  watchdog — check `main()` if you want it enforcing a real timeout.
-- **`main()`** toggles the user LED (GPIOB pin 3 / LD3) in an infinite loop.
+- **`SystemInit()`** (called by `Reset_Handler` before `.data`/`.bss` are set
+  up, per CMSIS convention) only enables the FPU, which `-mfloat-abi=hard`
+  requires before any float code runs.
+- **`main()`** arms the watchdog first, then `clock_init()` (SYSCLK to HSI16,
+  16 MHz), `systick_init()` (1 ms interrupt), and the LED pin. Arming the
+  watchdog first means a hang during clock bring-up still ends in a reset.
+- **SysTick** increments a 32-bit millisecond counter; `systick_get_ms()`
+  reads it (atomic on Cortex-M4). Compare times with unsigned subtraction so
+  the ~49-day wrap is harmless.
+- **IWDG** (independent watchdog) has a ~2 s timeout, is frozen while a
+  debugger halts the core, and is kicked every pass of the superloop.
+- The superloop toggles the user LED (GPIOB pin 3 / LD3) every 500 ms.
 
 ## Building
 

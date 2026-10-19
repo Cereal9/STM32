@@ -3,21 +3,22 @@
 
 #include "stdint.h"
 
-// Watchdog Timer (IWDG) register keys and configuration values
-#define IWD_ENABLE_KEY 0xCCCC
-#define IWD_RELOAD_KEY 0xAAAA
-#define IWD_WRITE_ACCESS_KEY 0x5555
-#define IWDG_PRESCALER 0x06
-#define IWDG_RELOAD_VALUE 0xFFF
-#define SYSCLK_HZ 16000000UL
-#define SYSTICK_RELOAD_1MS (SYSCLK_HZ / 1000U - 1U)
+#define SYSCLK_HZ 16000000u
+#define LED_BLINK_MS 500u
+#define IWDG_KEY_ENABLE 0xCCCCu
+#define IWDG_KEY_RELOAD 0xAAAAu
+#define IWDG_KEY_WRITE_ACCESS 0x5555u
+#define IWDG_PR_DIV16 0x2u
+#define IWDG_RELOAD_2S 3999u
 
 void SystemInit(void);
-void IWDG_Init(void);
-void IWDG_Kick(void);
-void Clock_Init(void);
-void SysTick_Init(void);
+void clock_init(void);
+void systick_init(void);
+uint64_t systick_get_ms(void);
 void SysTick_Handler(void);
-uint64_t SysTick_MS(void);
+void iwdg_init(void);
+void iwdg_kick(void);
+void led_init(void);
+void led_toggle(void);
 
-#endif
+#endif /* INITIALIZE_H */
